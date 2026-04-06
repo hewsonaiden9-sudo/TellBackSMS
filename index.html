@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TellBack SMS</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:Arial,sans-serif; background:#1a1a2e; color:#eee; height:100vh; overflow:hidden; }
+
+.screen { display:none; position:absolute; top:0; left:0; right:0; bottom:50px; overflow-y:auto; }
+.screen.active { display:block; }
+
+.header { background:#16213e; padding:13px 16px; font-size:18px; font-weight:bold; color:#e94560; border-bottom:1px solid #0f3460; position:sticky; top:0; z-index:10; }
+.header-sub { font-size:11px; color:#888; font-weight:normal; }
+
+.nav { position:fixed; bottom:0; left:0; right:0; height:50px; background:#16213e; display:flex; border-top:1px solid #0f3460; z-index:20; }
+.nav-btn { flex:1; background:none; border:none; color:#888; font-size:11px; cursor:pointer; padding:6px 2px; }
+.nav-btn.active { color:#e94560; border-top:2px solid #e94560; }
+
+.chat-item { padding:14px 16px; border-bottom:1px solid #0f3460; cursor:pointer; }
+.chat-item:active { background:#0f3460; }
+.chat-name { font-size:15px; font-weight:bold; }
+.chat-preview { font-size:12px; color:#888; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.chat-time { font-size:10px; color:#555; float:right; }
+
+.messages { padding:10px 10px 120px 10px; }
+.msg { margin:6px 0; max-width:78%; padding:9px 13px; border-radius:14px; font-size:13px; word-wrap:break-word; clear:both; }
+.msg.sent { background:#e94560; float:right; border-bottom-right-radius:3px; }
+.msg.recv { background:#0f3460; float:left; border-bottom-left-radius:3px; }
+.msg-time { font-size:10px; opacity:0.6; margin-top:4px; }
+.clearfix { clear:both; }
+
+.input-area { position:fixed; bottom:50px; left:0; right:0; background:#16213e; padding:8px 10px; display:flex; gap:8px; border-top:1px solid #0f3460; }
+.input-area input { flex:1; background:#0f3460; border:none; color:#eee; padding:10px 14px; border-radius:22px; font-size:14px; outline:none; }
+.input-area button { background:#e94560; border:none; color:white; padding:10px 18px; border-radius:22px; font-size:14px; cursor:pointer; font-weight:bold; }
+
+.form-group { padding:16px; border-bottom:1px solid #0f3460; }
+.form-group label { font-size:12px; color:#888; display:block; margin-bottom:7px; text-transform:uppercase; letter-spacing:0.5px; }
+.form-group input { width:100%; background:#0f3460; border:none; color:#eee; padding:11px 13px; border-radius:8px; font-size:14px; outline:none; }
+.btn-primary { display:block; width:calc(100% - 32px); margin:16px; background:#e94560; border:none; color:white; padding:13px; border-radius:10px; font-size:15px; cursor:pointer; font-weight:bold; }
+
+.setting-item { padding:14px 16px; border-bottom:1px solid #0f3460; }
+.setting-label { font-size:11px; color:#888; margin-bottom:7px; text-transform:uppercase; letter-spacing:0.5px; }
+.setting-input { width:100%; background:#0f3460; border:none; color:#eee; padding:11px 13px; border-radius:8px; font-size:14px; outline:none; }
+
+.status-row { display:flex; align-items:center; padding:14px 16px; }
+.status-dot { width:9px; height:9px; border-radius:50%; margin-right:8px; flex-shrink:0; }
+.dot-green { background:#4caf50; }
+.dot-red { background:#f44336; }
+.dot-yellow { background:#ff9800; }
+
+.empty-state { padding:40px 20px; text-align:center; color:#555; font-size:14px; line-height:1.8; }
+
+.notif { position:fixed; top:8px; left:8px; right:8px; background:#0f3460; border-left:3px solid #e94560; padding:10px 14px; border-radius:7px; font-size:13px; display:none; z-index:999; box-shadow:0 2px 10px rgba(0,0,0,0.5); }
+
+.badge { background:#e94560; color:white; border-radius:10px; padding:1px 7px; font-size:11px; margin-left:5px; }
+
+.section-title { padding:10px 16px; font-size:11px; color:#555; text-transform:uppercase; letter-spacing:1px; background:#111827; }
+</style>
+</head>
+<body>
+
+<div class="notif" id="notif"></div>
+
+<!-- Chats Screen -->
+<div class="screen active" id="screen-chats">
+  <div class="header">TellBack SMS <span class="header-sub" id="header-status"></span></div>
+  <div id="chat-list"></div>
+</div>
+
+<!-- Chat Screen -->
+<div class="screen" id="screen-chat">
+  <div class="header" id="chat-header">Chat</div>
+  <div class="messages" id="messages"></div>
+  <div class="input-area">
+    <input type="text" id="msg-input" placeholder="Type a message...">
+    <button onclick="sendMessage()">Send</button>
+  </div>
+</div>
+
+<!-- New Chat Screen -->
+<div class="screen" id="screen-new">
+  <div class="header">New Message</div>
+  <div class="form-group">
+    <label>Phone Number</label>
+    <input type="tel" id="new-number" placeholder="+15551234567">
+  </div>
+  <div class="form-group">
+    <label>Message</label>
+    <input type="text" id="new-message" placeholder="Type your message...">
+  </div>
+  <button class="btn-primary" onclick="startNewChat()">Send Message</button>
+</div>
+
+<!-- Settings Screen -->
+<div class="screen" id="screen-settings">
+  <div class="header">Settings</div>
+  <div class="section-title">Gateway Credentials</div>
+  <div class="setting-item">
+    <div class="setting-label">Username</div>
+    <input class="setting-input" id="set-username" type="text" placeholder="Gateway username" autocomplete="off">
+  </div>
+  <div class="setting-item">
+    <div class="setting-label">Password</div>
+    <input class="setting-input" id="set-password" type="password" placeholder="Gateway password">
+  </div>
+  <button class="btn-primary" onclick="saveSettings()">Save &amp; Connect</button>
+  <div class="section-title">Connection Status</div>
+  <div class="status-row" id="conn-status">
+    <div class="status-dot dot-red" id="status-dot"></div>
+    <span id="status-text">Not connected</span>
+  </div>
+  <div class="section-title">About</div>
+  <div class="setting-item" style="font-size:13px;color:#888;line-height:1.7">
+    TellBack SMS bridges your Wi-Fi device to real SMS via your Android phone running SMS Gateway for Android.
+  </div>
+</div>
+
+<!-- Nav -->
+<div class="nav">
+  <button class="nav-btn active" id="nav-chats" onclick="showScreen('chats')">&#x1F4AC; Chats</button>
+  <button class="nav-btn" id="nav-new" onclick="showScreen('new')">&#x270F; New</button>
+  <button class="nav-btn" id="nav-settings" onclick="showScreen('settings')">&#x2699; Settings</button>
+</div>
+
+<script>
+var API = "https://api.sms-gate.app/3rdparty/v1";
+var username = "";
+var password = "";
+var conversations = {};
+var currentContact = "";
+var unread = {};
+var lastPoll = new Date(Date.now() - 60000).toISOString();
+
+// Base64 encode (works on old browsers without btoa)
+function b64(str) {
+  try { return btoa(str); } catch(e) {
+    var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+    var out = "", i = 0;
+    while (i < str.length) {
+      var c1=str.charCodeAt(i++), c2=str.charCodeAt(i++), c3=str.charCodeAt(i++);
+      var e1=c1>>2, e2=((c1&3)<<4)|(c2>>4), e3=((c2&15)<<2)|(c3>>6), e4=c3&63;
+      if (isNaN(c2)) { e3=e4=64; } else if (isNaN(c3)) { e4=64; }
+      out += chars[e1]+chars[e2]+chars[e3]+chars[e4];
+    }
+    return out;
+  }
+}
+
+function authHeader() { return "Basic " + b64(username + ":" + password); }
+
+function load() {
+  try {
+    username = localStorage.getItem("tb_u") || "";
+    password = localStorage.getItem("tb_p") || "";
+    var c = localStorage.getItem("tb_c");
+    if (c) conversations = JSON.parse(c);
+    var lp = localStorage.getItem("tb_lp");
+    if (lp) lastPoll = lp;
+  } catch(e) {}
+  document.getElementById("set-username").value = username;
+  document.getElementById("set-password").value = password;
+}
+
+function save() {
+  try {
+    localStorage.setItem("tb_u", username);
+    localStorage.setItem("tb_p", password);
+    localStorage.setItem("tb_c", JSON.stringify(conversations));
+    localStorage.setItem("tb_lp", lastPoll);
+  } catch(e) {}
+}
+
+function saveSettings() {
+  username = document.getElementById("set-username").value.trim();
+  password = document.getElementById("set-password").value.trim();
+  save();
+  showNotif("Saved! Testing connection...");
+  testConn();
+}
+
+function request(method, url, body, cb) {
+  var xhr = new XMLHttpRequest();
+  xhr.open(method, url, true);
+  xhr.setRequestHeader("Authorization", authHeader());
+  xhr.setRequestHeader("Content-Type", "application/json");
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState === 4) cb(xhr.status, xhr.responseText);
+  };
+  xhr.timeout = 10000;
+  xhr.ontimeout = function() { cb(0, "timeout"); };
+  xhr.send(body ? JSON.stringify(body) : null);
+}
+
+function testConn() {
+  var dot = document.getElementById("status-dot");
+  var txt = document.getElementById("status-text");
+  dot.className = "status-dot dot-yellow";
+  txt.innerHTML = "Connecting...";
+  request("GET", API + "/health", null, function(s, r) {
+    if (s === 200) {
+      dot.className = "status-dot dot-green";
+      txt.innerHTML = "Connected";
+      document.getElementById("header-status").innerHTML = "&#x25CF; online";
+      document.getElementById("header-status").style.color = "#4caf50";
+    } else {
+      dot.className = "status-dot dot-red";
+      txt.innerHTML = "Failed (" + s + ") - check credentials";
+      document.getElementById("header-status").innerHTML = "&#x25CF; offline";
+      document.getElementById("header-status").style.color = "#f44336";
+    }
+  });
+}
+
+function sendMessage() {
+  var text = document.getElementById("msg-input").value.trim();
+  if (!text || !currentContact) return;
+  if (!username || !password) { showNotif("Set credentials in Settings first!"); return; }
+  document.getElementById("msg-input").value = "";
+  request("POST", API + "/message", { message: text, phoneNumbers: [currentContact] }, function(s, r) {
+    if (s === 200 || s === 202) {
+      addMsg(currentContact, text, true);
+      save();
+      renderChatList();
+    } else {
+      showNotif("Send failed: " + r);
+      document.getElementById("msg-input").value = text;
+    }
+  });
+}
+
+function startNewChat() {
+  var num = document.getElementById("new-number").value.trim();
+  var msg = document.getElementById("new-message").value.trim();
+  if (!num) { showNotif("Enter a phone number"); return; }
+  if (!msg) { showNotif("Enter a message"); return; }
+  if (!username || !password) { showNotif("Set credentials in Settings first!"); return; }
+  currentContact = num;
+  if (!conversations[num]) conversations[num] = [];
+  request("POST", API + "/message", { message: msg, phoneNumbers: [num] }, function(s, r) {
+    if (s === 200 || s === 202) {
+      addMsg(num, msg, true);
+      document.getElementById("new-number").value = "";
+      document.getElementById("new-message").value = "";
+      save();
+      openChat(num);
+    } else {
+      showNotif("Send failed: " + r);
+    }
+  });
+}
+
+function addMsg(contact, text, sent) {
+  if (!conversations[contact]) conversations[contact] = [];
+  var t = new Date();
+  var time = t.getHours() + ":" + (t.getMinutes()<10?"0":"")+t.getMinutes();
+  conversations[contact].push({ text:text, sent:sent, time:time });
+  if (contact === currentContact) renderMessages();
+}
+
+function openChat(contact) {
+  currentContact = contact;
+  unread[contact] = 0;
+  document.getElementById("chat-header").innerHTML = contact;
+  renderMessages();
+  showScreen("chat");
+}
+
+function renderMessages() {
+  var msgs = conversations[currentContact] || [];
+  var html = "";
+  for (var i = 0; i < msgs.length; i++) {
+    var m = msgs[i];
+    html += '<div class="msg ' + (m.sent?"sent":"recv") + '">' + escHtml(m.text) + '<div class="msg-time">' + m.time + '</div></div><div class="clearfix"></div>';
+  }
+  if (!html) html = '<div class="empty-state">No messages yet.<br>Send one below!</div>';
+  var el = document.getElementById("messages");
+  el.innerHTML = html;
+  el.scrollTop = el.scrollHeight;
+}
+
+function renderChatList() {
+  var keys = Object.keys(conversations);
+  var html = "";
+  if (keys.length === 0) {
+    html = '<div class="empty-state">No conversations yet.<br>Tap &#x270F; New to start one!</div>';
+  }
+  for (var i = keys.length - 1; i >= 0; i--) {
+    var contact = keys[i];
+    var msgs = conversations[contact];
+    var last = msgs.length > 0 ? msgs[msgs.length-1] : null;
+    var badge = unread[contact] ? '<span class="badge">'+unread[contact]+'</span>' : "";
+    html += '<div class="chat-item" onclick="openChat(\''+escAttr(contact)+'\')">';
+    html += '<div class="chat-name">' + escHtml(contact) + badge;
+    if (last) html += '<span class="chat-time">' + last.time + '</span>';
+    html += '</div>';
+    if (last) html += '<div class="chat-preview">' + (last.sent?"You: ":"") + escHtml(last.text) + '</div>';
+    html += '</div>';
+  }
+  document.getElementById("chat-list").innerHTML = html;
+}
+
+function pollMessages() {
+  if (!username || !password) return;
+  var url = API + "/message?state=received&since=" + encodeURIComponent(lastPoll);
+  request("GET", url, null, function(s, r) {
+    if (s === 200) {
+      try {
+        var data = JSON.parse(r);
+        if (data && data.length) {
+          var gotNew = false;
+          for (var i = 0; i < data.length; i++) {
+            var m = data[i];
+            var from = m.phoneNumber || m.from || "Unknown";
+            var text = m.message || m.text || "";
+            var mid = m.id || "";
+            addMsg(from, text, false);
+            if (!unread[from]) unread[from] = 0;
+            if (from !== currentContact) unread[from]++;
+            showNotif("New from " + from + ": " + text);
+            gotNew = true;
+          }
+          if (gotNew) {
+            lastPoll = new Date().toISOString();
+            save();
+            if (document.getElementById("screen-chats").className.indexOf("active") > -1) renderChatList();
+          }
+        }
+      } catch(e) {}
+    }
+  });
+}
+
+function showNotif(msg) {
+  var el = document.getElementById("notif");
+  el.innerHTML = escHtml(msg);
+  el.style.display = "block";
+  clearTimeout(el._t);
+  el._t = setTimeout(function() { el.style.display = "none"; }, 3500);
+}
+
+function showScreen(name) {
+  var all = ["chats","chat","new","settings"];
+  for (var i = 0; i < all.length; i++) {
+    var s = document.getElementById("screen-" + all[i]);
+    if (s) s.className = "screen";
+    var n = document.getElementById("nav-" + all[i]);
+    if (n) n.className = "nav-btn";
+  }
+  document.getElementById("screen-" + name).className = "screen active";
+  var an = document.getElementById("nav-" + name);
+  if (an) an.className = "nav-btn active";
+  if (name === "chats") renderChatList();
+  if (name === "chat") renderMessages();
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function escAttr(s) {
+  return String(s).replace(/'/g,"\\'");
+}
+
+// Handle Enter key
+document.getElementById("msg-input").onkeydown = function(e) {
+  if (e.keyCode === 13) sendMessage();
+};
+document.getElementById("new-message").onkeydown = function(e) {
+  if (e.keyCode === 13) startNewChat();
+};
+
+// Init
+load();
+renderChatList();
+if (username && password) testConn();
+setInterval(pollMessages, 5000);
+</script>
+</body>
+</html>
