@@ -126,6 +126,7 @@ body { font-family:Arial,sans-serif; background:#1a1a2e; color:#eee; height:100v
 
 <script>
 var API = "https://api.sms-gate.app/3rdparty/v1";
+var SEND_URL = API + "/messages";
 var username = "";
 var password = "";
 var conversations = {};
@@ -198,7 +199,7 @@ function testConn() {
   var txt = document.getElementById("status-text");
   dot.className = "status-dot dot-yellow";
   txt.innerHTML = "Connecting...";
-  request("GET", API + "/health", null, function(s, r) {
+  request("GET", API + "/device", null, function(s, r) {
     if (s === 200) {
       dot.className = "status-dot dot-green";
       txt.innerHTML = "Connected";
@@ -218,7 +219,7 @@ function sendMessage() {
   if (!text || !currentContact) return;
   if (!username || !password) { showNotif("Set credentials in Settings first!"); return; }
   document.getElementById("msg-input").value = "";
-  request("POST", API + "/message", { message: text, phoneNumbers: [currentContact] }, function(s, r) {
+  request("POST", SEND_URL, { textMessage: { text: text }, phoneNumbers: [currentContact] }, function(s, r) {
     if (s === 200 || s === 202) {
       addMsg(currentContact, text, true);
       save();
@@ -238,7 +239,7 @@ function startNewChat() {
   if (!username || !password) { showNotif("Set credentials in Settings first!"); return; }
   currentContact = num;
   if (!conversations[num]) conversations[num] = [];
-  request("POST", API + "/message", { message: msg, phoneNumbers: [num] }, function(s, r) {
+  request("POST", SEND_URL, { textMessage: { text: msg }, phoneNumbers: [num] }, function(s, r) {
     if (s === 200 || s === 202) {
       addMsg(num, msg, true);
       document.getElementById("new-number").value = "";
@@ -303,7 +304,7 @@ function renderChatList() {
 
 function pollMessages() {
   if (!username || !password) return;
-  var url = API + "/message?state=received&since=" + encodeURIComponent(lastPoll);
+  var url = API + "/messages?state=received&since=" + encodeURIComponent(lastPoll);
   request("GET", url, null, function(s, r) {
     if (s === 200) {
       try {
