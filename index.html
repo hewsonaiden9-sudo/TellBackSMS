@@ -127,6 +127,7 @@ body { font-family:Arial,sans-serif; background:#1a1a2e; color:#eee; height:100v
 <script>
 var API = "https://api.sms-gate.app/3rdparty/v1";
 var SEND_URL = API + "/messages";
+var TEST_URL = API + "/messages?limit=1";
 var username = "";
 var password = "";
 var conversations = {};
@@ -199,7 +200,7 @@ function testConn() {
   var txt = document.getElementById("status-text");
   dot.className = "status-dot dot-yellow";
   txt.innerHTML = "Connecting...";
-  request("GET", API + "/device", null, function(s, r) {
+  request("GET", TEST_URL, null, function(s, r) {
     if (s === 200) {
       dot.className = "status-dot dot-green";
       txt.innerHTML = "Connected";
@@ -207,7 +208,7 @@ function testConn() {
       document.getElementById("header-status").style.color = "#4caf50";
     } else {
       dot.className = "status-dot dot-red";
-      txt.innerHTML = "Failed (" + s + ") - check credentials";
+      txt.innerHTML = "Failed (HTTP " + s + ") - " + r.substring(0, 80);
       document.getElementById("header-status").innerHTML = "&#x25CF; offline";
       document.getElementById("header-status").style.color = "#f44336";
     }
